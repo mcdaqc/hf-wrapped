@@ -1,0 +1,13 @@
+{
+	"extends": "./tooling/typescript/base.json",
+	"exclude": [
+		"node_modules",
+		"dist",
+		".next",
+		"build",
+		"apps/**/*.cjs",
+		"apps/**/*.mjs",
+		"**/*.config.cjs",
+		"**/*.config.mjs"
+	]
+}

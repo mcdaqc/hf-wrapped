@@ -1,0 +1,22 @@
+{
+	"extends": "../../tooling/typescript/nextjs.json",
+	"compilerOptions": {
+		"plugins": [{ "name": "next" }],
+		"paths": {
+			"@marketing/*": ["./modules/marketing/*"],
+			"@ui/*": ["./modules/ui/*"],
+			"@i18n": ["./modules/i18n"],
+			"@i18n/*": ["./modules/i18n/*"],
+			"@shared/*": ["./modules/shared/*"],
+			"@repo/wrapped": ["../../packages/wrapped"]
+		}
+	},
+	"include": [
+		"**/*.ts",
+		"**/*.tsx",
+		"**/*.cjs",
+		"**/*.mjs",
+		".next/types/**/*.ts"
+	],
+	"exclude": ["node_modules"]
+}

@@ -1,0 +1,10 @@
+node_modules
+.pnpm-store
+.turbo
+.next
+out
+dist
+.git
+.gitignore
+.env*
+Dockerfile

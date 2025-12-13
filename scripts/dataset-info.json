@@ -1,0 +1,24 @@
+{
+	"title": "HF Wrapped Dataset",
+	"description": "Per-user/year wrapped snapshots for Hugging Face activity. Each entry is stored as a JSON file under data/{year}-{subjectType}-{handle}.json.",
+	"schema": {
+		"file_pattern": "data/{year}-{subjectType}-{handle}.json",
+		"fields": [
+			"profile.handle",
+			"profile.displayName",
+			"profile.subjectType",
+			"year",
+			"activity.totalDownloads",
+			"activity.totalLikes",
+			"activity.totalRepos",
+			"activity.topTags",
+			"activity.busiestMonth",
+			"archetype",
+			"badges",
+			"slides",
+			"generatedAt",
+			"source"
+		]
+	},
+	"notes": "Initial artifact."
+}
