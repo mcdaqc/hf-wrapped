@@ -1,0 +1,10 @@
+{
+	"extends": "../../tooling/typescript/base.json",
+	"compilerOptions": {
+		"lib": ["ES2020", "DOM"],
+		"moduleResolution": "node"
+	},
+	"include": ["**/*.ts", "**/*.d.ts"],
+	"exclude": ["dist", "build", "node_modules"]
+}
+
