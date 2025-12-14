@@ -167,6 +167,19 @@ const archetypeAccents: Record<ArchetypeKey, string> = {
 	"HF Explorer": "from-emerald-400 to-lime-300",
 };
 
+const shareOverlayByArchetype: Record<ArchetypeKey, string> = {
+	"Model Maestro":
+		"radial-gradient(circle at 22% 26%, rgba(60,90,255,0.38), transparent 34%), radial-gradient(circle at 78% 18%, rgba(60,90,255,0.24), transparent 36%)",
+	"Dataset Architect":
+		"radial-gradient(circle at 20% 30%, rgba(232,80,72,0.30), transparent 34%), radial-gradient(circle at 78% 16%, rgba(232,80,72,0.18), transparent 36%)",
+	"Space Storyteller":
+		"radial-gradient(circle at 21% 25%, rgba(14,165,233,0.30), transparent 34%), radial-gradient(circle at 75% 14%, rgba(14,165,233,0.18), transparent 36%)",
+	"Research Curator":
+		"radial-gradient(circle at 22% 30%, rgba(168,85,247,0.30), transparent 34%), radial-gradient(circle at 78% 14%, rgba(168,85,247,0.18), transparent 36%)",
+	"HF Explorer":
+		"radial-gradient(circle at 22% 28%, rgba(52,211,153,0.30), transparent 34%), radial-gradient(circle at 76% 16%, rgba(52,211,153,0.18), transparent 36%)",
+};
+
 function imageForSlide(
 	slide: StorySlide,
 	wrapped: WrappedResult,
@@ -260,118 +273,133 @@ function pickBadge(activity: WrappedResult["activity"]): string {
 	return "HF Explorer";
 }
 
-function badgeReason(badge: string): string {
-	switch (badge) {
-		case "Model Powerhouse":
-			return "1M+ downloads across your work";
-		case "Community Favorite":
-			return "5k+ likes from the community";
-		case "Research Beacon":
-			return "Shared multiple research papers";
-		case "Spaces Trailblazer":
-			return "Built 3+ interactive spaces";
-		case "Data Shaper":
-			return "Published 5+ datasets";
-		case "Model Builder":
-			return "Created 3+ models";
-		case "HF Explorer":
-		default:
-			return "Exploring across repos and topics";
-	}
+function pluralize(label: string, count: number): string {
+	return count === 1 ? label : `${label}s`;
 }
 
-function buildBadgeMetrics(
+function buildBadgeDetails(
 	badge: string,
-	wrapped: WrappedResult,
+	activity: WrappedResult["activity"],
 	fmt: Intl.NumberFormat,
-): { label: string; value: string }[] {
-	const activity = wrapped.activity;
+): { metrics: { label: string; value: string }[]; highlights: string[] } {
+	const highlights: string[] = [];
+	const metrics: { label: string; value: string }[] = [];
 
 	switch (badge) {
 		case "Model Powerhouse":
-			return [
-				{
-					label: "Downloads",
-					value: fmt.format(activity.totalDownloads),
-				},
-				{
-					label: "Models",
-					value: fmt.format(activity.models.length || 1),
-				},
-			];
+			metrics.push({
+				label: "Downloads",
+				value: fmt.format(activity.totalDownloads),
+			});
+			metrics.push({
+				label: "Likes",
+				value: fmt.format(activity.totalLikes),
+			});
+			highlights.push(
+				`Shipped ${activity.models.length} ${pluralize("model", activity.models.length)} with 1M+ downloads`,
+			);
+			break;
 		case "Community Favorite":
-			return [
-				{
-					label: "Likes",
-					value: fmt.format(activity.totalLikes),
-				},
-				{
-					label: "Repos",
-					value: fmt.format(activity.totalRepos),
-				},
-			];
+			metrics.push({
+				label: "Likes",
+				value: fmt.format(activity.totalLikes),
+			});
+			metrics.push({
+				label: "Repos",
+				value: fmt.format(activity.totalRepos),
+			});
+			highlights.push(
+				`Earned ${fmt.format(activity.totalLikes)} likes across your work`,
+			);
+			break;
 		case "Research Beacon":
-			return [
-				{
-					label: "Papers",
-					value: fmt.format(activity.papers.length),
-				},
-				{
-					label: "Repos",
-					value: fmt.format(activity.totalRepos),
-				},
-			];
-		case "Spaces Trailblazer":
-			return [
-				{
-					label: "Spaces",
-					value: fmt.format(activity.spaces.length),
-				},
-				{
-					label: "Likes",
-					value: fmt.format(activity.totalLikes),
-				},
-			];
-		case "Data Shaper":
-			return [
-				{
-					label: "Datasets",
-					value: fmt.format(activity.datasets.length),
-				},
-				{
-					label: "Downloads",
-					value: fmt.format(activity.totalDownloads),
-				},
-			];
-		case "Model Builder":
-			return [
-				{
-					label: "Models",
-					value: fmt.format(activity.models.length),
-				},
-				{
-					label: "Downloads",
-					value: fmt.format(activity.totalDownloads),
-				},
-			];
-		case "HF Explorer":
-		default:
-			return [
-				{
-					label: "Repos",
-					value: fmt.format(activity.totalRepos),
-				},
-				{
-					label: "Downloads",
-					value: fmt.format(activity.totalDownloads),
-				},
-			];
+			metrics.push({
+				label: "Papers",
+				value: fmt.format(activity.papers.length),
+			});
+			highlights.push(
+				`Published ${fmt.format(activity.papers.length)} research paper${activity.papers.length === 1 ? "" : "s"}`,
+			);
+			break;
+		case "Spaces Trailblazer": {
+			const spaces = activity.spaces.length;
+			metrics.push({
+				label: "Spaces",
+				value: fmt.format(spaces),
+			});
+			const topSpace = activity.spaces[0]?.name;
+			if (topSpace) {
+				metrics.push({
+					label: "Top Space",
+					value: topSpace,
+				});
+			}
+			highlights.push(
+				`Built ${fmt.format(spaces)} interactive ${pluralize("space", spaces)}`,
+			);
+			break;
+		}
+		case "Data Shaper": {
+			const datasets = activity.datasets.length;
+			metrics.push({
+				label: "Datasets",
+				value: fmt.format(datasets),
+			});
+			const topDataset = activity.datasets[0]?.name;
+			if (topDataset) {
+				metrics.push({
+					label: "Top dataset",
+					value: topDataset,
+				});
+			}
+			highlights.push(
+				`Shaped ${fmt.format(datasets)} ${pluralize("dataset", datasets)} this year`,
+			);
+			break;
+		}
+		case "Model Builder": {
+			const models = activity.models.length;
+			metrics.push({
+				label: "Models",
+				value: fmt.format(models),
+			});
+			const topModel = activity.models[0]?.name;
+			if (topModel) {
+				metrics.push({
+					label: "Top model",
+					value: topModel,
+				});
+			}
+			highlights.push(
+				`Built ${fmt.format(models)} ${pluralize("model", models)} this year`,
+			);
+			break;
+		}
+		default: {
+			metrics.push({
+				label: "Repos",
+				value: fmt.format(activity.totalRepos),
+			});
+			metrics.push({
+				label: "Downloads",
+				value: fmt.format(activity.totalDownloads),
+			});
+			highlights.push("Explorer mode: tried a bit of everything");
+		}
 	}
+
+	return {
+		metrics,
+		highlights: sanitizeHighlights(highlights),
+	};
 }
 
 function buildSlides(wrapped: WrappedResult): StorySlide[] {
 	const fmt = new Intl.NumberFormat("en-US", { notation: "compact" });
+	const fmtCompactMaybePlus = (value: number): string =>
+		value === 1000 ? "+1K" : fmt.format(value);
 	const badge = pickBadge(wrapped.activity);
+	const badgeInfo = buildBadgeDetails(badge, wrapped.activity, fmt);
 	const topModels = wrapped.activity.models.slice(0, 3);
 	const topDatasets = wrapped.activity.datasets.slice(0, 3);
 	const topSpaces = wrapped.activity.spaces.slice(0, 3);
@@ -403,19 +431,21 @@ function buildSlides(wrapped: WrappedResult): StorySlide[] {
 			metrics: [
 				{
 					label: "Models",
-					value: wrapped.activity.models.length.toString(),
+					value: fmtCompactMaybePlus(wrapped.activity.models.length),
 				},
 				{
 					label: "Datasets",
-					value: wrapped.activity.datasets.length.toString(),
+					value: fmtCompactMaybePlus(
+						wrapped.activity.datasets.length,
+					),
 				},
 				{
 					label: "Spaces",
-					value: wrapped.activity.spaces.length.toString(),
+					value: fmtCompactMaybePlus(wrapped.activity.spaces.length),
 				},
 				{
 					label: "Papers",
-					value: wrapped.activity.papers.length.toString(),
+					value: fmtCompactMaybePlus(wrapped.activity.papers.length),
 				},
 			],
 			highlights: [
@@ -510,10 +540,10 @@ function buildSlides(wrapped: WrappedResult): StorySlide[] {
 		{
 			id: "badges",
 			kind: "badges",
-			title: "Your badge this year",
+			title: `Your ${wrapped.year} badge`,
 			subtitle: badge,
-			metrics: buildBadgeMetrics(badge, wrapped, fmt),
-			highlights: [badgeReason(badge)],
+			metrics: badgeInfo.metrics,
+			highlights: badgeInfo.highlights,
 		},
 		{
 			id: "share",
@@ -522,40 +552,34 @@ function buildSlides(wrapped: WrappedResult): StorySlide[] {
 			subtitle: `Your Hugging Face 🤗 in ${wrapped.year} `,
 			metrics: [
 				{
-					label: "Badge",
-					value: badge,
+					label: "Models",
+					value: fmtCompactMaybePlus(wrapped.activity.models.length),
+				},
+				{
+					label: "Datasets",
+					value: fmtCompactMaybePlus(
+						wrapped.activity.datasets.length,
+					),
+				},
+				{
+					label: "Spaces",
+					value: fmtCompactMaybePlus(wrapped.activity.spaces.length),
 				},
 				{
 					label: "Archetype",
 					value: wrapped.archetype,
 				},
 				{
-					label:
-						wrapped.activity.papers.length >
-						Math.max(
-							wrapped.activity.models.length,
-							wrapped.activity.datasets.length,
-							wrapped.activity.spaces.length,
-						)
-							? "Papers"
-							: "Repos",
-					value:
-						wrapped.activity.papers.length >
-						Math.max(
-							wrapped.activity.models.length,
-							wrapped.activity.datasets.length,
-							wrapped.activity.spaces.length,
-						)
-							? fmt.format(wrapped.activity.papers.length)
-							: fmt.format(wrapped.activity.totalRepos),
+					label: "Papers",
+					value: fmtCompactMaybePlus(wrapped.activity.papers.length),
 				},
 				{
 					label: "Downloads",
-					value: fmt.format(wrapped.activity.totalDownloads),
+					value: fmtCompactMaybePlus(wrapped.activity.totalDownloads),
 				},
 				{
 					label: "Likes",
-					value: fmt.format(wrapped.activity.totalLikes),
+					value: fmtCompactMaybePlus(wrapped.activity.totalLikes),
 				},
 				{
 					label: "Top model",
@@ -616,7 +640,8 @@ export function StoryScroller({ wrapped }: { wrapped: WrappedResult }) {
 		}
 		const mql = window.matchMedia("(prefers-reduced-motion: reduce)");
 		setPrefersReducedMotion(mql.matches);
-		const handler = (event: MediaQueryListEvent) => setPrefersReducedMotion(event.matches);
+		const handler = (event: MediaQueryListEvent) =>
+			setPrefersReducedMotion(event.matches);
 		mql.addEventListener("change", handler);
 		return () => mql.removeEventListener("change", handler);
 	}, []);
@@ -908,7 +933,20 @@ export function StoryScroller({ wrapped }: { wrapped: WrappedResult }) {
 													archetypeKey
 												] ?? palette.accent
 											}`;
-											const hasAccentRail = false;
+											const hasAccentRail =
+												slide.kind === "share";
+											const overlay =
+												isShare &&
+												shareOverlayByArchetype[
+													archetypeKey
+												]
+													? shareOverlayByArchetype[
+															archetypeKey
+														]
+													: undefined;
+											const backgroundImage = overlay
+												? `${overlay}, ${palette.gradient}`
+												: palette.gradient;
 											const isSingleColumn =
 												slide.kind === "archetype" ||
 												slide.kind === "badges";
@@ -986,8 +1024,7 @@ export function StoryScroller({ wrapped }: { wrapped: WrappedResult }) {
 														style={{
 															willChange:
 																"transform, opacity",
-															backgroundImage:
-																palette.gradient,
+															backgroundImage,
 														}}
 													>
 														{hasAccentRail ? (
@@ -1547,41 +1584,53 @@ export function StoryScroller({ wrapped }: { wrapped: WrappedResult }) {
 																					</ul>
 																				) : isShare ? (
 																					<div className="space-y-3">
-																						<div className="grid grid-cols-1 gap-3">
-																							{(
-																								slide.metrics ??
-																								[]
-																							)
-																								.filter(
-																									(
-																										m,
-																									) =>
-																										m.label ===
-																										"Badge",
-																								)
-																								.map(
-																									(
-																										metric,
-																									) => (
+																						<div className="grid grid-cols-3 gap-3">
+																							{[
+																								"Models",
+																								"Datasets",
+																								"Spaces",
+																							].map(
+																								(
+																									label,
+																								) => {
+																									const metric =
+																										(
+																											slide.metrics ??
+																											[]
+																										).find(
+																											(
+																												m,
+																											) =>
+																												m.label ===
+																												label,
+																										);
+																									if (
+																										!metric
+																									) {
+																										return null;
+																									}
+																									return (
 																										<div
 																											key={
 																												metric.label
 																											}
-																											className="rounded-2xl border border-white/12 bg-white/5 px-6 py-5 shadow-inner shadow-black/10"
+																											className="rounded-2xl border border-white/12 bg-white/5 px-5 py-4 shadow-inner shadow-black/10"
 																										>
-																											<p className="text-base uppercase tracking-wide text-white/80">
+																											<p className="truncate text-sm uppercase tracking-wide text-white/75">
 																												{
 																													metric.label
 																												}
 																											</p>
-																											<p className="truncate whitespace-nowrap text-2xl font-semibold leading-tight text-white">
-																												{
-																													metric.value
-																												}
+																											<p className="truncate whitespace-nowrap text-3xl font-semibold text-white">
+																												{ellipsize(
+																													metric.value,
+																													40,
+																												)}
 																											</p>
 																										</div>
-																									),
-																								)}
+																									);
+																								},
+																							)}
 																						</div>
 																						<div className="grid grid-cols-3 gap-3">
 																							{((
@@ -1629,7 +1678,7 @@ export function StoryScroller({ wrapped }: { wrapped: WrappedResult }) {
 																											key={
 																												metric.label
 																											}
-																											className="rounded-2xl border border-white/12 bg-white/5 px-6 py-5 shadow-inner shadow-black/10"
+																											className="rounded-2xl border border-white/12 bg-white/5 px-5 py-4 shadow-inner shadow-black/10"
 																										>
 																											<p className="truncate text-sm uppercase tracking-wide text-white/75">
 																												{
@@ -1697,26 +1746,43 @@ export function StoryScroller({ wrapped }: { wrapped: WrappedResult }) {
 																						</div>
 																					</div>
 																				) : (
-																					<ul className="grid grid-cols-2 gap-4">
+																					<ul className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-4">
 																						{slide.metrics.map(
 																							(
 																								metric,
 																							) => (
 																								<li
 																									key={`${slide.id}-${metric.label}`}
-																									className="group relative overflow-hidden rounded-2xl border border-white/12 bg-white/5 px-6 py-5 shadow-lg shadow-black/25 backdrop-blur"
+																									className="group relative w-full min-w-0 overflow-hidden rounded-2xl border border-white/12 bg-white/5 px-6 py-5 shadow-lg shadow-black/25 backdrop-blur"
 																									data-story-metric
 																								>
-																									<p className="truncate text-sm uppercase tracking-wide text-white/70">
-																										{
-																											metric.label
-																										}
-																									</p>
-																									<p className="text-2xl font-semibold text-white">
-																										{
-																											metric.value
-																										}
-																									</p>
+																									<div className="flex min-w-0 w-full flex-col gap-1">
+																										<p className="truncate w-full min-w-0 text-sm uppercase tracking-wide text-white/70">
+																											{
+																												metric.label
+																											}
+																										</p>
+																										<p
+																											className="w-full min-w-0 text-2xl font-semibold text-white"
+																											style={{
+																												display:
+																													"-webkit-box",
+																												WebkitLineClamp: 1,
+																												WebkitBoxOrient:
+																													"vertical",
+																												overflow:
+																													"hidden",
+																												textOverflow:
+																													"ellipsis",
+																												wordBreak:
+																													"break-word",
+																											}}
+																										>
+																											{
+																												metric.value
+																											}
+																										</p>
+																									</div>
 																								</li>
 																							),
 																						)}

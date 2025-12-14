@@ -7,7 +7,8 @@ import type {
 } from "../domain/types";
 
 const HUB_BASE_URL = "https://huggingface.co";
-const DEFAULT_LIMIT = 50;
+// To cap page size, set a number (e.g., 200). Leave undefined to fetch all pages.
+const DEFAULT_LIMIT: number | undefined = undefined;
 
 function buildHandleCandidates(handle: string): string[] {
 	const trimmed = handle.trim();
@@ -99,6 +100,7 @@ export async function detectSubjectType(
 export async function fetchHubActivity(
 	handle: string,
 	subjectType: SubjectType,
+	year: number,
 	profileOverride?: WrappedProfile,
 ): Promise<HubActivityResponse> {
 	let profile: WrappedProfile;
@@ -145,27 +147,31 @@ export async function fetchHubActivity(
 	);
 
 	const [models, datasets, spaces, papers] = await Promise.all([
-		fetchReposWithFallback("model", authorCandidates),
-		fetchReposWithFallback("dataset", authorCandidates),
-		fetchReposWithFallback("space", authorCandidates),
+		fetchReposWithFallback("model", authorCandidates, year),
+		fetchReposWithFallback("dataset", authorCandidates, year),
+		fetchReposWithFallback("space", authorCandidates, year),
 		fetchPapersWithFallback(authorCandidates),
 	]);
+
+	const filteredModels = collectYearSortedDesc(models, year);
+	const filteredDatasets = collectYearSortedDesc(datasets, year);
+	const filteredSpaces = collectYearSortedDesc(spaces, year);
 
 	console.log(
 		"[wrapped] fetchHubActivity results",
 		JSON.stringify({
-			models: models.length,
-			datasets: datasets.length,
-			spaces: spaces.length,
+			models: filteredModels.length,
+			datasets: filteredDatasets.length,
+			spaces: filteredSpaces.length,
 			papers: papers.length,
 		}),
 	);
 
 	return {
 		profile: { ...profile, subjectType: resolvedSubjectType },
-		models,
-		datasets,
-		spaces,
+		models: filteredModels,
+		datasets: filteredDatasets,
+		spaces: filteredSpaces,
 		papers,
 	};
 }
@@ -173,32 +179,85 @@ export async function fetchHubActivity(
 async function fetchRepos(
 	kind: RepoKind,
 	author: string,
+	year?: number,
 ): Promise<RepoStats[]> {
-	const url = `${HUB_BASE_URL}/api/${kind}s?author=${author}&limit=${DEFAULT_LIMIT}&full=true&sort=downloads&direction=-1`;
-	const repos = await safeJsonFetch<HubRepoResponse[]>(url);
-	if (!repos) return [];
-	return repos.map((repo) => ({
-		id: repo.id,
-		name: repo.id.split("/")[1] ?? repo.id,
-		kind,
-		author,
-		likes: repo.likes ?? 0,
-		downloads: repo.downloads ?? 0,
-		tags: repo.tags,
-		private: repo.private,
-		updatedAt: repo.lastModified,
-		createdAt: repo.createdAt,
-		task: repo.task,
-	}));
+	const results: RepoStats[] = [];
+	let nextUrl: string | undefined;
+	const limitParam =
+		typeof DEFAULT_LIMIT === "number" ? `&limit=${DEFAULT_LIMIT}` : "";
+	const baseUrl = `${HUB_BASE_URL}/api/${kind}s?author=${author}${limitParam}&full=true&sort=createdAt&direction=-1`;
+	nextUrl = baseUrl;
+
+	while (true) {
+		if (!nextUrl) {
+			break;
+		}
+
+		const raw = await safeJsonFetch<
+			| HubRepoResponse[]
+			| { items?: HubRepoResponse[]; next?: string; cursor?: string }
+		>(nextUrl);
+		if (!raw) {
+			break;
+		}
+
+		const { items, nextCursor } = normalizeRepoPage(raw);
+		if (!items || items.length === 0) {
+			break;
+		}
+
+		results.push(
+			...items.map((repo) => ({
+				id: repo.id,
+				name: repo.id.split("/")[1] ?? repo.id,
+				kind,
+				author,
+				likes: repo.likes ?? 0,
+				downloads: repo.downloads ?? 0,
+				tags: repo.tags,
+				private: repo.private,
+				updatedAt: repo.lastModified,
+				createdAt: repo.createdAt,
+				task: repo.task,
+			})),
+		);
+
+		if (year) {
+			const lastWithDate = [...items]
+				.reverse()
+				.find((repo) => typeof repo.createdAt === "string");
+			if (lastWithDate?.createdAt) {
+				const lastYear = new Date(
+					lastWithDate.createdAt,
+				).getUTCFullYear();
+				if (!Number.isNaN(lastYear) && lastYear < year) {
+					break;
+				}
+			}
+		}
+
+		if (!nextCursor) {
+			break;
+		}
+
+		if (nextCursor.startsWith("http")) {
+			nextUrl = nextCursor;
+		} else {
+			nextUrl = `${baseUrl}&cursor=${encodeURIComponent(nextCursor)}`;
+		}
+	}
+
+	return results;
 }
 
 async function fetchReposWithFallback(
 	kind: RepoKind,
 	authors: string[],
+	year?: number,
 ): Promise<RepoStats[]> {
 	for (const author of authors) {
 		try {
-			const repos = await fetchRepos(kind, author);
+			const repos = await fetchRepos(kind, author, year);
 			console.log(
 				`[wrapped] fetchRepos ${kind}`,
 				JSON.stringify({ author, count: repos.length }),
@@ -233,7 +292,9 @@ async function fetchPapers(handle: string): Promise<PaperStats[]> {
 				url?: string;
 			}>
 		>(url);
-	if (!papers) return [];
+	if (!papers) {
+		return [];
+	}
 	return papers.map((paper) => ({
 		id: paper.arxivId,
 		title: paper.title,
@@ -244,7 +305,9 @@ async function fetchPapers(handle: string): Promise<PaperStats[]> {
 	}));
 }
 
-async function fetchPapersWithFallback(handles: string[]): Promise<PaperStats[]> {
+async function fetchPapersWithFallback(
+	handles: string[],
+): Promise<PaperStats[]> {
 	for (const handle of handles) {
 		try {
 			const papers = await fetchPapers(handle);
@@ -286,4 +349,40 @@ async function safeJsonFetch<T>(url: string): Promise<T | null> {
 			`Failed to fetch ${url}: ${(error as Error).message ?? "unknown error"}`,
 		);
 	}
+}
+
+function normalizeRepoPage(
+	raw:
+		| HubRepoResponse[]
+		| { items?: HubRepoResponse[]; next?: string; cursor?: string },
+): { items: HubRepoResponse[]; nextCursor?: string } {
+	if (Array.isArray(raw)) {
+		return { items: raw, nextCursor: undefined };
+	}
+	const items = Array.isArray(raw.items) ? raw.items : [];
+	const nextCursor = typeof raw.next === "string" ? raw.next : raw.cursor;
+	return { items, nextCursor };
+}
+
+function collectYearSortedDesc<T extends { createdAt?: string }>(
+	items: T[],
+	year: number,
+): T[] {
+	const results: T[] = [];
+	for (const item of items) {
+		if (!item.createdAt) {
+			continue;
+		}
+		const yr = new Date(item.createdAt).getUTCFullYear();
+		if (Number.isNaN(yr)) {
+			continue;
+		}
+		if (yr < year) {
+			break;
+		}
+		if (yr === year) {
+			results.push(item);
+		}
+	}
+	return results;
 }

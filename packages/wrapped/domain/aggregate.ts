@@ -1,6 +1,7 @@
 import type {
 	ActivitySnapshot,
 	PaperStats,
+	RepoKind,
 	RepoStats,
 	StorySlide,
 	WrappedProfile,
@@ -65,9 +66,13 @@ function findBusiestMonth(repos: RepoStats[]): string | undefined {
 	const monthHits = new Array(12).fill(0);
 	repos.forEach((repo) => {
 		const dateString = repo.updatedAt ?? repo.createdAt;
-		if (!dateString) return;
+		if (!dateString) {
+			return;
+		}
 		const date = new Date(dateString);
-		if (Number.isNaN(date.valueOf())) return;
+		if (Number.isNaN(date.valueOf())) {
+			return;
+		}
 		monthHits[date.getUTCMonth()] += 1;
 	});
 	const topIndex = monthHits.findIndex(
@@ -142,9 +147,12 @@ export function buildSlides(params: {
 	const { profile, year, activity, archetype, badges } = params;
 	const fmt = new Intl.NumberFormat("en-US", { notation: "compact" });
 
-	const topModels = activity.models.slice(0, 3);
-	const topDatasets = activity.datasets.slice(0, 3);
-	const topSpaces = activity.spaces.slice(0, 3);
+	const topModels = sortReposForRanking(activity.models, "model").slice(0, 3);
+	const topDatasets = sortReposForRanking(activity.datasets, "dataset").slice(
+		0,
+		3,
+	);
+	const topSpaces = sortReposForRanking(activity.spaces, "space").slice(0, 3);
 
 	const slides: StorySlide[] = [
 		{
@@ -264,8 +272,16 @@ export function buildSlides(params: {
 			subtitle: "Download the slides or share your Space link",
 			metrics: [
 				{
-					label: "Story count",
-					value: `${clamp(slidesCount(activity), 5, 10)} slides`,
+					label: "Models",
+					value: activity.models.length.toString(),
+				},
+				{
+					label: "Datasets",
+					value: activity.datasets.length.toString(),
+				},
+				{
+					label: "Spaces",
+					value: activity.spaces.length.toString(),
 				},
 			],
 		},
@@ -274,18 +290,50 @@ export function buildSlides(params: {
 	return slides;
 }
 
-function slidesCount(activity: ActivitySnapshot): number {
-	const buckets = [
-		activity.models.length,
-		activity.datasets.length,
-		activity.spaces.length,
-	]
-		.map((count) => (count > 0 ? 1 : 0))
-		.reduce<number>((acc, current) => acc + current, 0);
-	return clamp(5 + buckets, 5, 10);
-}
+function sortReposForRanking(repos: RepoStats[], kind: RepoKind): RepoStats[] {
+	const withKindPriority = [...repos];
 
-function clamp(value: number, min: number, max: number): number {
-	if (Number.isNaN(value)) return min;
-	return Math.min(Math.max(value, min), max);
+	const createdAtMs = (repo: RepoStats) => {
+		const ts = repo.createdAt ?? repo.updatedAt;
+		const ms = ts ? Date.parse(ts) : Number.NaN;
+		if (Number.isNaN(ms)) {
+			return 0;
+		}
+		return ms;
+	};
+
+	withKindPriority.sort((a, b) => {
+		const downloadsDiff = (b.downloads ?? 0) - (a.downloads ?? 0);
+		const likesDiff = (b.likes ?? 0) - (a.likes ?? 0);
+		const recencyDiff = createdAtMs(b) - createdAtMs(a);
+		const nameDiff = a.name.localeCompare(b.name);
+
+		if (kind === "space") {
+			// Spaces focus on engagement (likes), then downloads if present.
+			if (likesDiff !== 0) {
+				return likesDiff;
+			}
+			if (downloadsDiff !== 0) {
+				return downloadsDiff;
+			}
+			if (recencyDiff !== 0) {
+				return recencyDiff;
+			}
+			return nameDiff;
+		}
+
+		// Models/datasets: downloads first, likes second, recency third.
+		if (downloadsDiff !== 0) {
+			return downloadsDiff;
+		}
+		if (likesDiff !== 0) {
+			return likesDiff;
+		}
+		if (recencyDiff !== 0) {
+			return recencyDiff;
+		}
+		return nameDiff;
+	});
+
+	return withKindPriority;
 }

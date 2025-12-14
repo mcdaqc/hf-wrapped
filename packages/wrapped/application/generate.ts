@@ -40,6 +40,7 @@ export async function generateWrapped(
 		normalized.subjectType === "auto"
 			? "user"
 			: (normalized.subjectType ?? "user"),
+		normalized.year,
 	);
 
 	const snapshot = buildActivitySnapshot(
