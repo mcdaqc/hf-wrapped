@@ -10,7 +10,7 @@
 		}
 	},
 	"dependencies": {
-		"es-toolkit": "^1.41.0"
+		"es-toolkit": "^1.45.1"
 	},
 	"scripts": {
 		"type-check": "tsc --noEmit"
